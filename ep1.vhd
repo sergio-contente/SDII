@@ -1,18 +1,16 @@
 library ieee;
 use ieee.numeric_bit.all;
---Registrador de 8 bits que pode somar sua capacidade
+--Registrador de 8 bits (guarda A ou B)
 entity registerOp8 is
 	port (
 	  clock, reset  : in bit;						  -- Controle global: clock e reset
 	  enableIn      : in bit;                       -- Enable para carregar input
-	  enAdd			: in bit;						  -- Enables para somar
 	  parallel_in   : in bit_vector(7 downto 0);   -- Input dado ao registrador
-	  parallel_out  : out bit_vector(7 downto 0)    -- Conteúdo do registrador
+	  parallel_out  : out bit_vector(15 downto 0)    -- Conteúdo do registrador
 	);
   end entity;
   
   architecture arch_reg8 of registerOp8 is
-	  signal internal, first_input: unsigned(7 downto 0);
 	  begin
 	  
 	  process(clock, reset)
@@ -22,9 +20,7 @@ entity registerOp8 is
 		
 		  elsif clock'event and clock='1' then
 			  if enableIn = '1' then 
-			  	internal <= unsigned(parallel_in);
-				unit_vec <= internal;
-			  elsif enAdd = '1' then internal <= internal + unit_vec;
+			  	internal <= "000000" & parallel_in;
 			  end if;
 		end if;
 	  end process;
@@ -32,6 +28,69 @@ entity registerOp8 is
 	  parallel_out <= bit_vector(internal);
   
   end arch_reg8;
+
+  ---Registrador de 9 bits para guardar e atualizar nSums
+  entity registerOp9 is
+	port (
+	  clock, reset  : in bit;						  -- Controle global: clock e reset
+	  enableIn      : in bit;                       -- Enable para carregar input
+	  enAdd			: in bit;						  -- Enables para somar e subtrair
+	  parallel_in   : in bit_vector(8 downto 0);   -- Input dado ao registrador
+	  parallel_out  : out bit_vector(8 downto 0)    -- Conteúdo do registrador
+	);
+  end entity;
+  
+  architecture arch_reg9 of registerOp9 is
+	  signal internal: unsigned(8 downto 0);
+	  constant unit_vec: unsigned(8 downto 0) := "000000001";
+	  begin
+	  
+	  process(clock, reset)
+	  begin
+		  if reset = '1' then
+			  internal <= (others => '0');
+		  
+		  elsif clock'event and clock='1' then
+			  if enableIn = '1' then internal <= unsigned(parallel_in);
+			  elsif enAdd = '1' then internal <= internal + unit_vec;
+			  end if;
+		end if;
+	  end process;
+  
+	  parallel_out <= bit_vector(internal);
+  
+  end arch_reg9;
+
+  entity registerOp16 is
+	port (
+	  clock, reset  : in bit;						  -- Controle global: clock e reset
+	  enAdd			: in bit;						  -- Enables para somar e subtrair
+	  previous_in	: in bit_vector(15 downto 0)
+	  parallel_in   : in bit_vector(15 downto 0);   -- Input dado ao registrador
+	  parallel_out  : out bit_vector(15 downto 0)    -- Conteúdo do registrador
+	);
+  end entity;
+  
+  architecture arch_reg16 of registerOp16 is
+	  signal internal: unsigned(15 downto 0);
+
+	  begin
+	  
+	  process(clock, reset)
+	  begin
+		  if reset = '1' then
+			  internal <= (others => '0');
+		  
+		  elsif clock'event and clock='1' then
+			  if enAdd = '1' then internal <= parallel_in + previous_in;
+			  end if;
+		end if;
+	  end process;
+  
+	  parallel_out <= bit_vector(internal);
+  
+  end arch_reg16;
+
 --UC (Unity Control)
 entity UCmmc is
 	port(
@@ -78,7 +137,7 @@ architecture arch_uc of UCmmc is
 	updateSumB <= '1' when (state = mB_maior_mA) else '0';
 	end_state <= '1' when (state = a_igl_b) else '0';
 	reset_FD <= '1' when (reset = '1') else '0';
-	end arch_uc;
+end arch_uc;
 
 --FD (Fluxo de Dados)
 entity FDmmc is
@@ -93,7 +152,58 @@ entity FDmmc is
         iniciar, isDiff, isLess  : out bit -- SINAIS DE CONDICAO
 	);
 end FDmmc;
+architecture arch_fd of FDmmc is
+	-- DECLARACAO DOS COMPONENTES
+	component registerOp8 is
+		port (
+			clock, reset  : in bit;						  -- Controle global: clock e reset
+			enableIn      : in bit;                       -- Enable para carregar input
+			parallel_in   : in bit_vector(7 downto 0);   -- Input dado ao registrador
+			parallel_out  : out bit_vector(15 downto 0)    -- Conteúdo do registrador
+		);
+	  end component;
 
+
+	  component registerOp9 is
+		port (
+			clock, reset  : in bit;						  -- Controle global: clock e reset
+			enableIn      : in bit;                       -- Enable para carregar input
+			enAdd			: in bit;						  -- Enables para somar e subtrair
+			parallel_in   : in bit_vector(8 downto 0);   -- Input dado ao registrador
+			parallel_out  : out bit_vector(8 downto 0)    -- Conteúdo do registrador
+		);
+	  end component;
+
+	  component registerOp16 is
+		port (
+			clock, reset  : in bit;						  -- Controle global: clock e reset
+			enAdd			: in bit;						  -- Enables para somar e subtrair
+			previous_in	: in bit_vector(15 downto 0)
+			parallel_in   : in bit_vector(15 downto 0);   -- Input dado ao registrador
+			parallel_out  : out bit_vector(15 downto 0)    -- Conteúdo do registrador
+		);
+	  end component;
+
+	   -- DECLARACAO DOS SINAIS INTERNOS
+
+	   signal mA, mB: 	bit_vector(7 downto 0);
+	   signal mmc:	  	bit_vector(15 downto 0);
+	   signal nSomas_s:	bit_vector(8 downto 0);
+
+	   -- MAPEAMENTO DOS COMPONENTES
+		Areg: registerOp8 port map(clock, reset, inicia, A, mA);
+		Breg: registerOp8 port map(clock, reset, inicia, B, mB);
+
+		mAreg: registerOp16 port map(clock, reset, A, mA, mA);
+		mBreg: registerOp16 port map();
+
+		nSomasreg: register9 port map();
+
+		 -- COMPORTAMENTO DOS SINAIS INTERNOS
+		 addA <= 1 when mA /= "00000000" 
+		 -- COMPORTAMENTO DOS SINAIS DE CONDICAO
+		 -- COMPORTAMENTO DO SINAL DE SAIDA DEPENDENTE DO SINAL DE CONDICAO
+end arch_fd;
 entity mmc is
 	port (
 		reset, clock: in bit;
