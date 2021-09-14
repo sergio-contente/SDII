@@ -6,11 +6,12 @@ entity registerOp8 is
 	  clock, reset  : in bit;						  -- Controle global: clock e reset
 	  enableIn      : in bit;                       -- Enable para carregar input
 	  parallel_in   : in bit_vector(7 downto 0);   -- Input dado ao registrador
-	  parallel_out  : out bit_vector(15 downto 0)    -- Conteúdo do registrador
+	  parallel_out  : out bit_vector(7 downto 0)    -- Conteúdo do registrador
 	);
   end entity;
   
   architecture arch_reg8 of registerOp8 is
+	signal internal: bit_vector(7 downto 0)
 	  begin
 	  
 	  process(clock, reset)
@@ -20,7 +21,7 @@ entity registerOp8 is
 		
 		  elsif clock'event and clock='1' then
 			  if enableIn = '1' then 
-			  	internal <= "000000" & parallel_in;
+			  	internal <= parallel_in;
 			  end if;
 		end if;
 	  end process;
@@ -95,10 +96,9 @@ entity registerOp8 is
 entity UCmmc is
 	port(
         reset, clock           : in bit;  -- SINAIS UNIVERSAIS
-        iniciar, isDiff, isLess : in bit;  -- SINAL DE CONDICAO
-        initValues          : out bit; -- SINAL DE CONTROLE
-        updateSumA, updateSumB : out bit; -- SINAL DE CONTROLE
-        end_state         		: out bit; -- SINAL DE CONTROLE
+        inicia, isDiff, isLess : in bit;  -- SINAL DE CONDICAO
+        updateA, updateB, sumA, sumB : out bit; -- SINAL DE CONTROLE
+        fim, x     		: out bit; -- SINAL DE CONTROLE
         reset_FD               : out bit  -- SINAL DE CONTROLE, RESET         
     );
 end UCmmc;
@@ -124,41 +124,48 @@ architecture arch_uc of UCmmc is
  end process;
  	-- CIRCUITO COMBINATORIO PARA DETERMINAR next_state
 	next_state <=
-	Start        when (state = Start) and (iniciar = '0') else
-	test_a_b	 when (state = Start) and (iniciar = '1') else
+	Start        when (state = Start) and (inicia = '0') else
+	test_a_b	 when (state = Start) and (inicia = '1') else
 	
 	mA_maior_mB  when (state = test_a_b) 	 and (isLess = '1') and (isDiff = '0') else
 	mB_maior_mA  when  (state = test_a_b) 	 and (isLess = '0') and (isDiff = '0') else
-	
-	a_igl_b      when (state = test_a_b) and (isDiff = '1');
+	a_igl_b      when (state = test_a_b) and (isDiff = '0') else
+
+	test_a_b when  state = mA_maior_mB else
+	test_a_b when  state = mB_maior_mA;
+
 	-- COMPORTAMENTO DOS SINAIS DE CONTROLE
-	initValues <= '1' when ((state = Start) and (iniciar = '0')) or (state = A_igl_B)) else '0';
-	updateSumA <= '1' when (state = mA_maior_mB) else '0';
-	updateSumB <= '1' when (state = mB_maior_mA) else '0';
-	end_state <= '1' when (state = a_igl_b) else '0';
+	updateA	   <= '1' when (state = Start or state = mA_maior_mB) else '0';
+	updateB    <= '1' when (state = Start or state = mB_maior_mA) else '0';
+
+	sumA	   <= '1' when state = mA_maior_mB else '0';
+	sumB 	   <= '1' when state = mB_maior_mA else '0';
+
+	fim 	   <= '1' when (state = a_igl_b) else '0';
+	x  		   <= '1' when (state = a_igl_b) else '0';
 	reset_FD <= '1' when (reset = '1') else '0';
 end arch_uc;
 
 --FD (Fluxo de Dados)
 entity FDmmc is
 	port(
-		reset, clock             : in bit; -- CONTROLE GLOBAL
-        inicia			         : in bit;
-        A, B       			 	 : in bit_vector(7 downto 0);
-       	fim           			 : out bit;
-        nSomas				     : out bit_vector(3 downto 0);
-		updateSumA, updateSumB 	 : in bit; -- SINAIS DE CONTROLE
-        initValues		         : in bit;  -- SINAL DE CONTROLE
-        iniciar, isDiff, isLess  : out bit -- SINAIS DE CONDICAO
+		reset, clock          		     : in bit;   -- CONTROLE GLOBAL
+        inicia			      		     : in bit;
+        A, B       			 			 : in bit_vector(7 downto 0);
+        nSomas				     		 : out bit_vector(8 downto 0);
+		MMC						 		 : out bit_vector(15 downto 0)
+		updateA, updateB, sumA, sumB 	 : in bit;   -- SINAIS DE CONTROLE
+	    x								 : in bit;
+        isDiff, isLess 					 : out bit   -- SINAIS DE CONDICAO
 	);
 end FDmmc;
 architecture arch_fd of FDmmc is
 	-- DECLARACAO DOS COMPONENTES
 	component registerOp8 is
 		port (
-			clock, reset  : in bit;						  -- Controle global: clock e reset
-			enableIn      : in bit;                       -- Enable para carregar input
-			parallel_in   : in bit_vector(7 downto 0);   -- Input dado ao registrador
+			clock, reset  : in bit;						   -- Controle global: clock e reset
+			enableIn      : in bit;                        -- Enable para carregar input
+			parallel_in   : in bit_vector(7 downto 0);     -- Input dado ao registrador
 			parallel_out  : out bit_vector(15 downto 0)    -- Conteúdo do registrador
 		);
 	  end component;
@@ -168,8 +175,8 @@ architecture arch_fd of FDmmc is
 		port (
 			clock, reset  : in bit;						  -- Controle global: clock e reset
 			enableIn      : in bit;                       -- Enable para carregar input
-			enAdd			: in bit;						  -- Enables para somar e subtrair
-			parallel_in   : in bit_vector(8 downto 0);   -- Input dado ao registrador
+			enAdd		  : in bit;						  -- Enables para somar e subtrair
+			parallel_in   : in bit_vector(8 downto 0);    -- Input dado ao registrador
 			parallel_out  : out bit_vector(8 downto 0)    -- Conteúdo do registrador
 		);
 	  end component;
@@ -177,31 +184,45 @@ architecture arch_fd of FDmmc is
 	  component registerOp16 is
 		port (
 			clock, reset  : in bit;						  -- Controle global: clock e reset
-			enAdd			: in bit;						  -- Enables para somar e subtrair
+			enAdd			: in bit;					  -- Enables para somar e subtrair
 			previous_in	: in bit_vector(15 downto 0)
-			parallel_in   : in bit_vector(15 downto 0);   -- Input dado ao registrador
+			parallel_in   : in bit_vector(15 downto 0);    -- Input dado ao registrador
 			parallel_out  : out bit_vector(15 downto 0)    -- Conteúdo do registrador
 		);
 	  end component;
 
 	   -- DECLARACAO DOS SINAIS INTERNOS
 
-	   signal mA, mB: 	bit_vector(7 downto 0);
-	   signal mmc:	  	bit_vector(15 downto 0);
+	   signal AA, BB: 	bit_vector(15 downto 0);
+	   signal mA, mB:	bit_vector(15 downto 0);
+	   signal mmA, mmB: bit_vector(15 downto 0);
 	   signal nSomas_s:	bit_vector(8 downto 0);
+	   const soma: unsigned(8 downto 0) := "000000001"; 
 
 	   -- MAPEAMENTO DOS COMPONENTES
-		Areg: registerOp8 port map(clock, reset, inicia, A, mA);
-		Breg: registerOp8 port map(clock, reset, inicia, B, mB);
+		Areg: registerOp8 port map(clock, '0', updateA, A, AA);
+		Breg: registerOp8 port map(clock, '0', updateB, B, BB);
 
-		mAreg: registerOp16 port map(clock, reset, A, mA, mA);
-		mBreg: registerOp16 port map();
+		mAreg: registerOp16 port map(clock, '0', sumA, mA, mmA);
+		mBreg: registerOp16 port map(clock, '0', sumB, mB, mmB);
 
-		nSomasreg: register9 port map();
+		nSomasreg: registerOp9 port map(clock, '0', sumA or sumB, SSoma, nSomas_s);
+		SomaFim: registerOp9 port map(clock, '0', x, nSomas_s, nSomas);
+		regMMC: registerOp16 port map(clock, '0', x, sumA,mmc);
 
 		 -- COMPORTAMENTO DOS SINAIS INTERNOS
-		 addA <= 1 when mA /= "00000000" 
+		 mA <= '0000000' & AA when (sumA = '0') else
+		 		bit_vector((unsigned(mA) + unsigned(AA)));
+
+		 mB <= '0000000' & B when (sumB = '0') else
+		 		bit_vector((unsigned(mB) + unsigned(BB)));	
+		SSoma <= '000000000' when (inicia = '1') else
+				 bit_vector(unsigned(SSoma) + soma) when (sumA or sumB);
+				 
+		
 		 -- COMPORTAMENTO DOS SINAIS DE CONDICAO
+		 isDiff <= '1' when (mA /= mB) else '0';
+		 isLess <= '1' when (mA < mB) else '0';
 		 -- COMPORTAMENTO DO SINAL DE SAIDA DEPENDENTE DO SINAL DE CONDICAO
 end arch_fd;
 entity mmc is
@@ -218,19 +239,35 @@ end mmc;
 architecture archMMC of mmc is
 -- Declaracao de componentes
 component mmc_uc is
-
+	port(
+        reset, clock           : in bit;  -- SINAIS UNIVERSAIS
+        inicia, isDiff, isLess : in bit;  -- SINAL DE CONDICAO
+        updateA, updateB, sumA, sumB : out bit; -- SINAL DE CONTROLE
+        fim, x     		: out bit -- SINAL DE CONTROLE       
+    );
 end component;
 
 component mmc_fd is
-
+	port(
+		reset, clock          		     : in bit;   -- CONTROLE GLOBAL
+        inicia			      		     : in bit;
+        A, B       			 			 : in bit_vector(7 downto 0);
+        nSomas				     		 : out bit_vector(8 downto 0);
+		MMC						 		 : out bit_vector(15 downto 0)
+		updateA, updateB, sumA, sumB 	 : in bit;   -- SINAIS DE CONTROLE
+	    x								 : in bit;
+        isDiff, isLess 					 : out bit   -- SINAIS DE CONDICAO
+	);
 end component;
 
 --Declaração de sinais internos
-
+signal  updateA, updateB, sumA, sumB, isDiff, isLess, x: bit;
+signal clock_n: bit; 
 begin
 
 --Mapeamento dos componentes
-
+	xUC: mmc_uc port map(reset,clock, inicia, isDiff, isLess, updateA, updateB, sumA, sumB, fim, x);
+	xFD: mmc_fd port map(reset, clock, inicia, A, B, nSomas, MMC, updateA, updateB, sumA, sumB, x, isDiff, isLess);
 --Sinais internos
-
+	clock_n <= not(clock);
 end architecture;
