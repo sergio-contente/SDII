@@ -4,14 +4,14 @@ use ieee.numeric_bit.all;
 entity registerOp8 is
 	port (
 	  clock, reset  : in bit;						  -- Controle global: clock e reset
-	  enableIn      : in bit;                       -- Enable para carregar input
+	  en      : in bit;                       -- Enable para carregar input
 	  parallel_in   : in bit_vector(7 downto 0);   -- Input dado ao registrador
 	  parallel_out  : out bit_vector(7 downto 0)    -- Conteúdo do registrador
 	);
   end entity;
   
   architecture arch_reg8 of registerOp8 is
-	signal internal: bit_vector(7 downto 0)
+	signal internal: bit_vector(7 downto 0);
 	  begin
 	  
 	  process(clock, reset)
@@ -20,7 +20,7 @@ entity registerOp8 is
 			  internal <= (others => '0');
 		
 		  elsif clock'event and clock='1' then
-			  if enableIn = '1' then 
+			  if en = '1' then 
 			  	internal <= parallel_in;
 			  end if;
 		end if;
@@ -31,19 +31,19 @@ entity registerOp8 is
   end arch_reg8;
 
   ---Registrador de 9 bits para guardar e atualizar nSums
+library ieee;
+use ieee.numeric_bit.all;
   entity registerOp9 is
 	port (
 	  clock, reset  : in bit;						  -- Controle global: clock e reset
-	  enableIn      : in bit;                       -- Enable para carregar input
-	  enAdd			: in bit;						  -- Enables para somar e subtrair
+	  en     : in bit;                       -- Enable para carregar input					  -- Enables para somar e subtrair
 	  parallel_in   : in bit_vector(8 downto 0);   -- Input dado ao registrador
 	  parallel_out  : out bit_vector(8 downto 0)    -- Conteúdo do registrador
 	);
   end entity;
   
   architecture arch_reg9 of registerOp9 is
-	  signal internal: unsigned(8 downto 0);
-	  constant unit_vec: unsigned(8 downto 0) := "000000001";
+	  signal internal: bit_vector(8 downto 0);
 	  begin
 	  
 	  process(clock, reset)
@@ -52,8 +52,7 @@ entity registerOp8 is
 			  internal <= (others => '0');
 		  
 		  elsif clock'event and clock='1' then
-			  if enableIn = '1' then internal <= unsigned(parallel_in);
-			  elsif enAdd = '1' then internal <= internal + unit_vec;
+			  if en = '1' then internal <= (parallel_in);
 			  end if;
 		end if;
 	  end process;
@@ -61,19 +60,19 @@ entity registerOp8 is
 	  parallel_out <= bit_vector(internal);
   
   end arch_reg9;
-
+library ieee;
+use ieee.numeric_bit.all;
   entity registerOp16 is
 	port (
 	  clock, reset  : in bit;						  -- Controle global: clock e reset
-	  enAdd			: in bit;						  -- Enables para somar e subtrair
-	  previous_in	: in bit_vector(15 downto 0)
+	  en			: in bit;						  -- Enables para somar e subtrair
 	  parallel_in   : in bit_vector(15 downto 0);   -- Input dado ao registrador
 	  parallel_out  : out bit_vector(15 downto 0)    -- Conteúdo do registrador
 	);
   end entity;
   
   architecture arch_reg16 of registerOp16 is
-	  signal internal: unsigned(15 downto 0);
+	  signal internal: bit_vector(15 downto 0);
 
 	  begin
 	  
@@ -83,7 +82,7 @@ entity registerOp8 is
 			  internal <= (others => '0');
 		  
 		  elsif clock'event and clock='1' then
-			  if enAdd = '1' then internal <= parallel_in + previous_in;
+			  if en = '1' then internal <= parallel_in;
 			  end if;
 		end if;
 	  end process;
@@ -93,6 +92,8 @@ entity registerOp8 is
   end arch_reg16;
 
 --UC (Unity Control)
+library ieee;
+use ieee.numeric_bit.all;
 entity UCmmc is
 	port(
         reset, clock           : in bit;  -- SINAIS UNIVERSAIS
@@ -147,13 +148,15 @@ architecture arch_uc of UCmmc is
 end arch_uc;
 
 --FD (Fluxo de Dados)
+library ieee;
+use ieee.numeric_bit.all;
 entity FDmmc is
 	port(
 		reset, clock          		     : in bit;   -- CONTROLE GLOBAL
         inicia			      		     : in bit;
         A, B       			 			 : in bit_vector(7 downto 0);
         nSomas				     		 : out bit_vector(8 downto 0);
-		MMC						 		 : out bit_vector(15 downto 0)
+		MMC						 		 : out bit_vector(15 downto 0);
 		updateA, updateB, sumA, sumB 	 : in bit;   -- SINAIS DE CONTROLE
 	    x								 : in bit;
         isDiff, isLess 					 : out bit   -- SINAIS DE CONDICAO
@@ -164,7 +167,7 @@ architecture arch_fd of FDmmc is
 	component registerOp8 is
 		port (
 			clock, reset  : in bit;						   -- Controle global: clock e reset
-			enableIn      : in bit;                        -- Enable para carregar input
+			en      : in bit;                        -- Enable para carregar input
 			parallel_in   : in bit_vector(7 downto 0);     -- Input dado ao registrador
 			parallel_out  : out bit_vector(15 downto 0)    -- Conteúdo do registrador
 		);
@@ -174,8 +177,7 @@ architecture arch_fd of FDmmc is
 	  component registerOp9 is
 		port (
 			clock, reset  : in bit;						  -- Controle global: clock e reset
-			enableIn      : in bit;                       -- Enable para carregar input
-			enAdd		  : in bit;						  -- Enables para somar e subtrair
+			en      : in bit;                       -- Enable para carregar input			
 			parallel_in   : in bit_vector(8 downto 0);    -- Input dado ao registrador
 			parallel_out  : out bit_vector(8 downto 0)    -- Conteúdo do registrador
 		);
@@ -184,21 +186,22 @@ architecture arch_fd of FDmmc is
 	  component registerOp16 is
 		port (
 			clock, reset  : in bit;						  -- Controle global: clock e reset
-			enAdd			: in bit;					  -- Enables para somar e subtrair
-			previous_in	: in bit_vector(15 downto 0)
+			en		: in bit;					  -- Enables para somar e subtrair
 			parallel_in   : in bit_vector(15 downto 0);    -- Input dado ao registrador
 			parallel_out  : out bit_vector(15 downto 0)    -- Conteúdo do registrador
 		);
 	  end component;
-
+	 
 	   -- DECLARACAO DOS SINAIS INTERNOS
 
 	   signal AA, BB: 	bit_vector(15 downto 0);
 	   signal mA, mB:	bit_vector(15 downto 0);
 	   signal mmA, mmB: bit_vector(15 downto 0);
-	   signal nSomas_s:	bit_vector(8 downto 0);
-	   const soma: unsigned(8 downto 0) := "000000001"; 
+	   signal nSomas_s, SSoma:	bit_vector(8 downto 0);
+	   signal soma: unsigned(8 downto 0) := "000000001"; 
+	   signal enable: bit;
 
+	   begin
 	   -- MAPEAMENTO DOS COMPONENTES
 		Areg: registerOp8 port map(clock, '0', updateA, A, AA);
 		Breg: registerOp8 port map(clock, '0', updateB, B, BB);
@@ -206,18 +209,20 @@ architecture arch_fd of FDmmc is
 		mAreg: registerOp16 port map(clock, '0', sumA, mA, mmA);
 		mBreg: registerOp16 port map(clock, '0', sumB, mB, mmB);
 
-		nSomasreg: registerOp9 port map(clock, '0', sumA or sumB, SSoma, nSomas_s);
+		nSomasreg: registerOp9 port map(clock, '0', enable, SSoma, nSomas_s);
 		SomaFim: registerOp9 port map(clock, '0', x, nSomas_s, nSomas);
-		regMMC: registerOp16 port map(clock, '0', x, sumA,mmc);
+		regMMC: registerOp16 port map(clock, '0', x, mmA,mmc);
 
 		 -- COMPORTAMENTO DOS SINAIS INTERNOS
-		 mA <= '0000000' & AA when (sumA = '0') else
+		 enable <= '1' when sumA = '1' or sumB = '1' else '0';
+
+		 mA <= "0000000" & AA when (sumA = '0') else
 		 		bit_vector((unsigned(mA) + unsigned(AA)));
 
-		 mB <= '0000000' & B when (sumB = '0') else
+		 mB <= "0000000" & B when (sumB = '0') else
 		 		bit_vector((unsigned(mB) + unsigned(BB)));	
-		SSoma <= '000000000' when (inicia = '1') else
-				 bit_vector(unsigned(SSoma) + soma) when (sumA or sumB);
+		SSoma <= "000000000" when (inicia = '1') else
+				 bit_vector(unsigned(SSoma) + soma) when (sumA = '1' or sumB = '1');
 				 
 		
 		 -- COMPORTAMENTO DOS SINAIS DE CONDICAO
@@ -225,7 +230,9 @@ architecture arch_fd of FDmmc is
 		 isLess <= '1' when (mA < mB) else '0';
 		 -- COMPORTAMENTO DO SINAL DE SAIDA DEPENDENTE DO SINAL DE CONDICAO
 end arch_fd;
-entity mmc is
+library ieee;
+use ieee.numeric_bit.all;
+entity xmmc is
 	port (
 		reset, clock: in bit;
 		inicia: in bit;
@@ -234,9 +241,9 @@ entity mmc is
 		nSomas:	out bit_vector(8 downto 0);
 		MMC:	out bit_vector(15 downto 0)
 	);
-end mmc;
+end xmmc;
 
-architecture archMMC of mmc is
+architecture archMMC of xmmc is
 -- Declaracao de componentes
 component mmc_uc is
 	port(
@@ -253,7 +260,7 @@ component mmc_fd is
         inicia			      		     : in bit;
         A, B       			 			 : in bit_vector(7 downto 0);
         nSomas				     		 : out bit_vector(8 downto 0);
-		MMC						 		 : out bit_vector(15 downto 0)
+		MMC						 		 : out bit_vector(15 downto 0);
 		updateA, updateB, sumA, sumB 	 : in bit;   -- SINAIS DE CONTROLE
 	    x								 : in bit;
         isDiff, isLess 					 : out bit   -- SINAIS DE CONDICAO
