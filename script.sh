@@ -1,4 +1,4 @@
 ghdl -a ep1.vhd
-ghdl -a testbench.vhd
-ghdl -e counter16
-ghdl -r counter16 --vcd=simul.vcd
+ghdl -a testbench_Pr1_v6.vhd
+ghdl -e testbench
+ghdl -r testbench --vcd=simul.vcd
