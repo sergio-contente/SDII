@@ -49,29 +49,27 @@ end regfile;
 
 architecture rfa of regfile is
 	component reg is
-		port (
+		generic( wordSize: natural := 4);
+		port(
 			clock: in bit;
 			reset: in bit;
 			load:  in bit;
 			d:	   in bit_vector(wordSize-1 downto 0);
 			q:	   out bit_vector(wordSize - 1 downto 0)
 		);
-	end component;
+		end component;
 type saida is array (0 to regn-1) of bit_vector(wordSize -1 downto 0);
-type entrada is array (0 to regn-1) of bit_vector(wordSize -1 downto 0);
-
+type load_tipo is array (0 to (2**natural(ceil(log2(real(regn)))) - 1)) of bit;
 signal reg_saida : saida;
-signal reg_entrada : entrada;
 signal  nulo : bit_vector(wordSize - 1 downto 0);
+signal load_aux: load_tipo;
 begin
 	nulo <= (others => '0');
-    reg_entrada(to_integer(unsigned(wr))) <= d;
-	bank_register: for x in regn-1 downto 0 generate
-		is_last: if x = regn - 1 generate
-			last_register: reg port map(clock, reset, regWrite, reg_entrada(x), nulo);
-		end generate;
-    my_register: reg port map(clock, reset, regWrite, reg_entrada(x), reg_saida(x));
+	bank_register: for x in regn-2 downto 0 generate
+	load_aux(x) <= '1' when x = to_integer(unsigned(wr)) and regWrite = '1' and reset = '0' else '0';
+    my_register: reg generic map(wordSize) port map(clock, reset, load_aux(x), d, reg_saida(x));
 	end generate;
+reg_saida(regn - 1) <= nulo;
 q1 <= (reg_saida(to_integer(unsigned(rr1))));
 q2 <= (reg_saida(to_integer(unsigned(rr2))));
 end architecture;
