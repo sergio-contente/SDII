@@ -82,71 +82,6 @@ q2 <= (reg_saida(to_integer(unsigned(rr2))));
 end architecture;
 
 ----------------------------------------------------------------------------------------------------------------------
--- Somador
-----------------------------------------------------------------------------------------------------------------------
-library ieee;
-use ieee.numeric_bit.all;
-use ieee.math_real.ceil;
-use ieee.math_real.log2;
-entity adder is
-generic( wordSize: natural := 4);
-port(
-	clock: 		in bit;
-	reset: 		in bit;
-	load:  		in bit;
-	oper1:	    in bit_vector(wordSize-1 downto 0);
-	oper2:	    in bit_vector(wordSize-1 downto 0);
-	dest:	    out bit_vector(wordSize - 1 downto 0)
-);
-end adder;
-
-architecture sum of adder is
-begin
-process(clock, reset)
-begin
-	if reset = '1' then
-		dest <= (others => '0');
-	elsif clock = '1' and clock'event then
-		if load = '1' then
-			dest <= bit_vector(signed(signed(oper1) + signed(oper2)));
-		end if;
-	end if;
-end process;
-end architecture;
-
-----------------------------------------------------------------------------------------------------------------------
--- Subtrator
-----------------------------------------------------------------------------------------------------------------------
-library ieee;
-use ieee.numeric_bit.all;
-use ieee.math_real.ceil;
-use ieee.math_real.log2;
-entity subtrator is
-generic( wordSize: natural := 4);
-port(
-	clock: 	   in bit;
-	reset: 	   in bit;
-	load:  	   in bit;
-	oper1:	   in bit_vector(wordSize-1 downto 0);
-	oper2:	   in bit_vector(wordSize-1 downto 0);
-	dest:	   out bit_vector(wordSize - 1 downto 0)
-);
-end subtrator;
-
-architecture difference of subtrator is
-begin
-process(clock, reset)
-begin
-	if reset = '1' then
-		dest <= (others => '0');
-	elsif clock = '1' and clock'event then
-		if load = '1' then
-			dest <= bit_vector(signed(signed(oper1) - signed(oper2)));
-		end if;
-	end if;
-end process;
-end architecture;
-----------------------------------------------------------------------------------------------------------------------
 --! Calculadora
 ----------------------------------------------------------------------------------------------------------------------
 library ieee;
@@ -191,39 +126,15 @@ component regfile is
 	);
 end component;
 
-component adder is
-	generic( wordSize: natural := 4);
-	port(
-		clock: 		in bit;
-		reset: 		in bit;
-		load:		in bit;
-		oper1:	    in bit_vector(wordSize-1 downto 0);
-		oper2:	    in bit_vector(wordSize-1 downto 0);
-		dest:	    out bit_vector(wordSize - 1 downto 0)
-	);
-end component;
 
-component subtrator is
-	generic( wordSize: natural := 4);
-	port(
-		clock: 	   in bit;
-		reset:     in bit;
-		load:  	   in bit;
-		oper1:	   in bit_vector(wordSize-1 downto 0);
-		oper2:	   in bit_vector(wordSize-1 downto 0);
-		dest:	   out bit_vector(wordSize - 1 downto 0)
-	);
-end component;
-
-type mem_reg is array (0 to 31) of bit_vector(15 downto 0);
 
 --Sinais internos
 
 signal opcode : bit_vector(1 downto 0);
 signal end_oper1, end_oper2, end_dest, inst_oper2: bit_vector(4 downto 0);
-signal imediato, v_oper2, v_oper1, v_dest, v_destA, v_destB, v_destAi, v_destBi, q1_aux, q2_aux: bit_vector(15 downto 0);
+signal imediato, v_oper2, v_oper1, v_dest, q1_aux, q2_aux: bit_vector(15 downto 0);
 signal ADD, SUB, ADDI, SUBI, load_r, load_a, load_s: bit;
-signal reg_signal : mem_reg;
+
 
 begin
 
@@ -240,14 +151,16 @@ ADD  <= '1' when opcode = "00" else '0';
 ADDI <= '1' when opcode = "01" else '0';
 SUB  <= '1' when opcode = "10" else '0';
 SUBI <= '1' when opcode = "11" else '0';
+
 --Tratando imediato
 imediato  <= bit_vector(resize(signed(inst_oper2) , 16 ));
 end_oper2 <=  instruction(14 downto 10) when ADD = '1' or SUB = '1';
 v_oper2 <= q2_aux when ADD = '1' or SUB = '1' else
 		   imediato when ADDI = '1' or SUBI = '1';
+
 --Setando os valores dos operadores
-v_oper1 <= q1_aux;
-v_dest  <= v_destA when ADD = '1' else v_destAi when ADDI = '1' else v_destB when SUB = '1' else v_destBi when SUBI = '1';
+q1 <= q1_aux;
+--v_dest  <= v_destA when ADD = '1' else v_destAi when ADDI = '1' else v_destB when SUB = '1' else v_destBi when SUBI = '1';
 
 load_a  <= '1' when ADD = '1' or ADDI = '1' else '0';
 load_s  <= '1' when SUB = '1' or SUBI = '1' else '0';
@@ -255,13 +168,13 @@ load_r  <= '1' when load_A = '1' or load_S = '1' else '0';
 
 --Mapeamento dos componentes
 
-add_comp: adder generic map(16) port map(clock, reset, ADD, q1_aux, q2_aux, v_destA);
-addI_comp: adder generic map(16) port map(clock, reset, ADDI, q1_aux, imediato, v_destAi);
-
-sub_comp: subtrator generic map(16) port map(clock, reset, SUB, q1_aux, q2_aux, v_destB);
-subI_comp: subtrator generic map(16) port map(clock, reset, SUBI, q1_aux, imediato, v_destBi);
+v_dest <=
+        bit_vector(signed(q1_aux) + signed(v_oper2)) when ADD = '1' else
+        bit_vector(signed(q1_aux) - signed(v_oper2)) when SUB = '1' else
+        --------------------------------
+        bit_vector(signed(q1_aux) + signed(imediato)) when ADDI = '1' else
+        bit_vector(signed(q1_aux) - signed(imediato)) when SUBI = '1';
 
 all_registers: regfile generic map(32, 16) port map(clock, reset, load_r, end_oper1, end_oper2, end_dest, v_dest, q1_aux, q2_aux);
 
-q1 <= v_oper1;
 end architecture;
